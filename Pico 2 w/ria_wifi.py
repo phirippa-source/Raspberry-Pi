@@ -131,15 +131,15 @@ class RiaWiFi:
                 self.scan()
             if self.find(ssid) is None:
                 raise WiFiConnectError("SSID not found in scan results: %s" % ssid)
-    
+
         # 이전 연결 정리
         try:
             self._wlan.disconnect()
         except:
             pass
-    
+
         self._wlan.connect(ssid, password)
-    
+
         t0 = time.ticks_ms()
         while not self._wlan.isconnected():
             if time.ticks_diff(time.ticks_ms(), t0) > timeout_s * 1000:
@@ -147,12 +147,11 @@ class RiaWiFi:
                     "connect timeout: ssid=%s, status=%s" % (ssid, self._wlan.status())
                 )
             time.sleep(0.2)
-    
+
         ip, netmask, gateway, dns = self._wlan.ifconfig()
         self._connected_ssid = ssid
         self._netinfo = NetInfo(ip, netmask, gateway, dns)
-    return self._netinfo
-
+        return self._netinfo
 
     def ensure_connected(self, ssid, password, timeout_s=15):
         """
@@ -169,4 +168,3 @@ class RiaWiFi:
         finally:
             self._connected_ssid = None
             self._netinfo = None
-
