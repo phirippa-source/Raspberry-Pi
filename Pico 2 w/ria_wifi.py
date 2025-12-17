@@ -120,10 +120,10 @@ class RiaWiFi:
                 return ap
         return None
 
-    def connect(self, ssid, password, timeout_s=15, precheck=False, auto_scan=True):
+    def connect(self, ssid, password, timeout_s=15, precheck=True, auto_scan=True):
         """
         지정 SSID 접속 후 NetInfo 반환.
-        - precheck=True: 접속 전 scan 결과로 SSID 존재 확인
+        - precheck=True(기본): 접속 전 scan 결과로 SSID 존재 확인
         - auto_scan=True: precheck 시 scan 결과가 없으면 자동 scan
         """
         if precheck:
@@ -131,15 +131,15 @@ class RiaWiFi:
                 self.scan()
             if self.find(ssid) is None:
                 raise WiFiConnectError("SSID not found in scan results: %s" % ssid)
-
+    
         # 이전 연결 정리
         try:
             self._wlan.disconnect()
         except:
             pass
-
+    
         self._wlan.connect(ssid, password)
-
+    
         t0 = time.ticks_ms()
         while not self._wlan.isconnected():
             if time.ticks_diff(time.ticks_ms(), t0) > timeout_s * 1000:
@@ -147,11 +147,12 @@ class RiaWiFi:
                     "connect timeout: ssid=%s, status=%s" % (ssid, self._wlan.status())
                 )
             time.sleep(0.2)
-
+    
         ip, netmask, gateway, dns = self._wlan.ifconfig()
         self._connected_ssid = ssid
         self._netinfo = NetInfo(ip, netmask, gateway, dns)
-        return self._netinfo
+    return self._netinfo
+
 
     def ensure_connected(self, ssid, password, timeout_s=15):
         """
