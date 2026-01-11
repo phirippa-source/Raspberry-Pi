@@ -1,4 +1,5 @@
 from machine import Pin
+from ST7789 import ST7789
 import machine
 import time
 import rp2
@@ -159,10 +160,22 @@ class TRSensor():
         return int(self.last_value),sensor_values
 
 if __name__ == '__main__':
-
+    lcd = ST7789()
     print("\nTRSensor Test Program ...\r\n")
-    TRS=TRSensor()
+    TRS = TRSensor()
+    
     while True:
-        print(TRS.AnalogRead())
-        time.sleep(0.1)
+        sensors = TRS.AnalogRead()
+        print(sensors)
+        str_sensors ='[ '
+        for sensor in sensors:
+            str_sensors += f'{sensor:>{4}}' + ','
+        str_sensors = str_sensors[:-1] + ' ]'
+        
+        lcd.fill(0xFFFF)
+        lcd.text("TRSensor Test Program",10,5,0xFF00)
+        lcd.text(str_sensors, 10, 15)
+        lcd.show()
+        
+        time.sleep(0.2)
                 
