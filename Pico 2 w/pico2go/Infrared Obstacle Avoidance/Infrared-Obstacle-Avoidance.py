@@ -19,5 +19,5 @@ while True:
     else:
         M.forward(20)								# 1, 1 (장애물 없음) --> 전진 
         
-    print(f'DR:{DR_status}, DL:{DL_status}')    
+    print(f'DL:{DL_status}, DR:{DR_status}')  
     utime.sleep_ms(10)
