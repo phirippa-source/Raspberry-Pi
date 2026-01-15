@@ -10,15 +10,14 @@ while True:
     DR_status = DSR.value()
     DL_status = DSL.value()
 
-    if((DL_status == 0) and (DR_status == 0)):
+    if((DL_status == 0) and (DR_status == 0)):		# 왼쪽과 오른쪽 모두 장애물 --> 우회전 
         M.left(10)
-    elif((DL_status == 0) and (DR_status == 1)):
+    elif((DL_status == 0) and (DR_status == 1)):	# 왼쪽에 장애물	--> 우회전  
         M.right(10)
-    elif((DL_status == 1) and (DR_status == 0)):
+    elif((DL_status == 1) and (DR_status == 0)):	# 오른쪽에 장애물 --> 좌회전 
         M.left(10)
     else:
-        M.forward(20)
+        M.forward(20)								# 1, 1 (장애물 없음) --> 전진 
         
     print(f'DR:{DR_status}, DL:{DL_status}')    
     utime.sleep_ms(10)
-
