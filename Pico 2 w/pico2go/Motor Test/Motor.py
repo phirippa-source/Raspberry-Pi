@@ -78,7 +78,7 @@ class PicoGo(object):
 if __name__=='__main__':
     import utime
     print('4초 후 움직입니다')
-    time.sleep(3)
+    time.sleep(3)    # 3초 대기
     buzzer = Pin(4, Pin.OUT)
     buzzer.value(1)
     time.sleep(1)
@@ -87,11 +87,14 @@ if __name__=='__main__':
     
     M = PicoGo()
     M.forward(50)
-    utime.sleep(0.5)
+    utime.sleep(0.5)    # 0.5초 대기
+    
     M.backward(50)
     utime.sleep(0.5)
+    
     M.left(30)
     utime.sleep(0.5)
+    
     M.right(30)
     utime.sleep(0.5)
     M.stop()
