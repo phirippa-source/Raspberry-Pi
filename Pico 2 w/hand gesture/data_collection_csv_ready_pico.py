@@ -3,7 +3,7 @@ from time import sleep_ms, ticks_ms, ticks_diff
 from lsm6ds3 import LSM6DS3
 
 FILE_NAME = "gesture_log.csv"
-DURATION_MS = 10000      # 10초 기록
+DURATION_MS = 14000      # 10초 기록
 SAMPLE_INTERVAL_MS = 10  # 약 100Hz
 
 i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400_000)
