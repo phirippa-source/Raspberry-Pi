@@ -49,5 +49,5 @@ with open(FILE_NAME, "w") as f:
             sleep_ms(1)
 
 print("저장 완료")
-print("샘플 수 =", count)
+print("데이터 포인트 수 =", count)
 print("파일 이름 =", FILE_NAME)
