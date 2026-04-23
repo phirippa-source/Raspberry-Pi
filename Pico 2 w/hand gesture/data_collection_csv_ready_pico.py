@@ -20,7 +20,7 @@ print("기록이 시작되면 손동작을 수 차례 반복하세요.")
 for cnt in [5, 4, 3, 2, 1]:
     print(cnt)
     sleep_ms(1000)
-print("저장 시작:", FILE_NAME)
+print("0 샘플링 시작:", FILE_NAME)
 
 start_ms = ticks_ms()
 next_ms = start_ms
