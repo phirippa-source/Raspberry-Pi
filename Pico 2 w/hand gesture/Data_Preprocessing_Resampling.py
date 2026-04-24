@@ -1,25 +1,32 @@
 import csv
 import math
 import os
+import stat
+import time
+import shutil
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 
 # =========================================================
 # 사용자 설정
 # =========================================================
+BASE_DIR = Path("./dataset")
 
-# 파일 위치는 필요에 맞게 수정하세요.
-# 예:
-# ("sample_right_01.csv", "right")
-# ("./dataset/right/sample_right_01.csv", "right")
-JOBS = [
-    ("./dataset/right/sample_right_01.csv", "right"),
-    ("./dataset/left/sample_left_01.csv", "left"),
-    ("./dataset/forward/sample_forward_01.csv", "forward"),
-    ("./dataset/stop/sample_stop_01.csv", "stop"),
-]
+CLASS_DIRS = {
+    "right": BASE_DIR / "right",
+    "left": BASE_DIR / "left",
+    "forward": BASE_DIR / "forward",
+    "stop": BASE_DIR / "stop",
+}
+
+PROCESSED_DIR = BASE_DIR / "processed"
+OUTPUT_LONG_CSV = PROCESSED_DIR / "gestures_long.csv"
+OUTPUT_WIDE_CSV = PROCESSED_DIR / "gestures_wide.csv"
+OUTPUT_SEGMENT_DIR = PROCESSED_DIR / "samples"
 
 # 최종 샘플 길이
-TARGET_LEN = 84   # 84 또는 90
+TARGET_LEN = 84   # 필요하면 90으로 변경
 
 # threshold
 A_THRESHOLD = 0.08
@@ -33,21 +40,94 @@ MIN_IDLE_SAMPLES = 15
 PAD_BEFORE = 5
 PAD_AFTER = 5
 
-# 출력 파일
-OUTPUT_LONG_CSV = "./dataset/processed/gestures_long.csv"
-OUTPUT_WIDE_CSV = "./dataset/processed/gestures_wide.csv"
-OUTPUT_SEGMENT_DIR = "./dataset/processed/samples"
-
 # 옵션
-SHOW_PLOT = True
-SAVE_SEGMENT_FILES = True
+SHOW_PLOT = False          # True면 raw 파일마다 그래프 표시
+SAVE_SEGMENT_FILES = True  # 개별 샘플 csv 저장 여부
 FLOAT_FMT = "{:.6f}"
+
+
+# =========================================================
+# 파일/폴더 삭제 보조 함수 (Windows 대응)
+# =========================================================
+def _on_rm_error(func, path, exc_info):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def force_remove_file(path: Path, retries=5, delay=0.3):
+    for attempt in range(retries):
+        try:
+            if path.exists():
+                os.chmod(path, stat.S_IWRITE)
+                path.unlink()
+            return
+        except PermissionError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+
+
+def force_remove_tree_contents(folder: Path, retries=5, delay=0.3):
+    if not folder.exists():
+        return
+
+    for item in folder.iterdir():
+        for attempt in range(retries):
+            try:
+                if item.is_file() or item.is_symlink():
+                    os.chmod(item, stat.S_IWRITE)
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item, onerror=_on_rm_error)
+                break
+            except PermissionError:
+                if attempt == retries - 1:
+                    raise
+                time.sleep(delay)
+
+
+# =========================================================
+# processed 폴더 정리
+# - long/wide는 삭제
+# - samples 폴더는 남겨두고 내부만 비움
+# =========================================================
+def clean_processed_dir():
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_SEGMENT_DIR.mkdir(parents=True, exist_ok=True)
+
+    if OUTPUT_LONG_CSV.exists():
+        force_remove_file(OUTPUT_LONG_CSV)
+
+    if OUTPUT_WIDE_CSV.exists():
+        force_remove_file(OUTPUT_WIDE_CSV)
+
+    force_remove_tree_contents(OUTPUT_SEGMENT_DIR)
+
+
+# =========================================================
+# raw CSV 자동 수집
+# =========================================================
+def discover_jobs():
+    jobs = []
+
+    for label, folder in CLASS_DIRS.items():
+        if not folder.exists():
+            print(f"[주의] 폴더가 없습니다: {folder}")
+            continue
+
+        # 각 클래스 폴더 안의 모든 csv를 처리
+        files = sorted(folder.glob("*.csv"))
+
+        for file_path in files:
+            jobs.append((file_path, label))
+
+    return jobs
 
 
 # =========================================================
 # CSV 읽기
 # =========================================================
-def load_csv(filename):
+def load_csv(filename: Path):
     t = []
     ax = []
     ay = []
@@ -56,7 +136,7 @@ def load_csv(filename):
     gy = []
     gz = []
 
-    with open(filename, "r", newline="", encoding="utf-8") as f:
+    with filename.open("r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             t.append(float(row["t_ms"]))   # ms
@@ -79,8 +159,8 @@ def compute_features(ax, ay, az, gx, gy, gz):
     g_mag = []
 
     for i in range(len(ax)):
-        am = math.sqrt(ax[i]**2 + ay[i]**2 + az[i]**2)
-        gm = math.sqrt(gx[i]**2 + gy[i]**2 + gz[i]**2)
+        am = math.sqrt(ax[i] ** 2 + ay[i] ** 2 + az[i] ** 2)
+        gm = math.sqrt(gx[i] ** 2 + gy[i] ** 2 + gz[i] ** 2)
 
         a_mag.append(am)
         a_dyn.append(abs(am - 1.0))
@@ -263,9 +343,9 @@ def wide_header(target_len):
 # long CSV 저장
 # =========================================================
 def save_long_csv(filename, samples, labels, sample_ids):
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    filename.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(filename, "w", newline="", encoding="utf-8") as f:
+    with filename.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(long_header())
 
@@ -288,9 +368,9 @@ def save_long_csv(filename, samples, labels, sample_ids):
 # wide CSV 저장
 # =========================================================
 def save_wide_csv(filename, samples, labels, sample_ids, target_len):
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    filename.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(filename, "w", newline="", encoding="utf-8") as f:
+    with filename.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(wide_header(target_len))
 
@@ -306,17 +386,14 @@ def save_wide_csv(filename, samples, labels, sample_ids, target_len):
 # 개별 샘플 CSV 저장
 # =========================================================
 def save_segment_files(samples, label, source_csv, sample_ids, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    base = os.path.splitext(os.path.basename(source_csv))[0]
+    base = source_csv.stem
 
     for local_idx, (sample, sample_id) in enumerate(zip(samples, sample_ids), start=1):
-        filename = os.path.join(
-            output_dir,
-            f"{base}_seg_{local_idx:03d}_id_{sample_id:03d}_{label}.csv"
-        )
+        filename = output_dir / f"{base}_seg_{local_idx:03d}_id_{sample_id:03d}_{label}.csv"
 
-        with open(filename, "w", newline="", encoding="utf-8") as f:
+        with filename.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["time_idx", "ax", "ay", "az", "gx", "gy", "gz"])
 
@@ -375,21 +452,28 @@ def show_plot(t, a_mag, a_dyn, g_mag, segments, a_threshold, g_threshold, title)
 # 메인
 # =========================================================
 def main():
+    print("processed 폴더 정리 중...")
+    clean_processed_dir()
+
+    jobs = discover_jobs()
+
+    if len(jobs) == 0:
+        print("처리할 raw CSV 파일이 없습니다.")
+        return
+
+    print(f"발견된 raw CSV 파일 수 = {len(jobs)}")
+
     all_samples = []
     all_labels = []
     all_sample_ids = []
 
     next_sample_id = 1
 
-    for input_csv, label in JOBS:
+    for input_csv, label in jobs:
         print()
         print("=" * 70)
         print("INPUT_CSV =", input_csv)
         print("LABEL     =", label)
-
-        if not os.path.exists(input_csv):
-            print("파일이 존재하지 않습니다. 건너뜁니다.")
-            continue
 
         t, ax, ay, az, gx, gy, gz = load_csv(input_csv)
 
@@ -419,7 +503,7 @@ def main():
             show_plot(
                 t, a_mag, a_dyn, g_mag, segments,
                 A_THRESHOLD, G_THRESHOLD,
-                title=f"{os.path.basename(input_csv)}  /  label={label}"
+                title=f"{input_csv.name}  /  label={label}"
             )
 
         current_samples = []
@@ -480,7 +564,6 @@ def main():
     print("샘플 shape = {} x 6".format(TARGET_LEN))
     print("wide 입력 차원 =", TARGET_LEN * 6)
 
-    # 클래스별 샘플 개수 출력
     class_count = {}
     for label in all_labels:
         class_count[label] = class_count.get(label, 0) + 1
