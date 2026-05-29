@@ -13,8 +13,9 @@
 #     car = PaiZCar(TEAM_ID)
 #     car.connect()
 #
-#     car.command("F", 1000)
-#     car.command("S", 500)
+#     car.send("F")            # Send one command packet
+#     car.command("F", 1000)   # Send command repeatedly for 1000 ms
+#     car.stop()
 
 
 import bluetooth
@@ -95,17 +96,11 @@ class PaiZCar:
         "07:R"
         "07:S"
 
-    Student-facing usage:
-
-        from ria_z_ble_car import PaiZCar
-
-        TEAM_ID = 7
-
-        car = PaiZCar(TEAM_ID)
-        car.connect()
-
-        car.command("F", 1000)
-        car.command("S", 500)
+    Command meaning:
+        F : Forward
+        L : Left curve forward
+        R : Right curve forward
+        S : Stop
     """
 
     def __init__(self, team_id):
@@ -212,6 +207,12 @@ class PaiZCar:
 
             time.sleep_ms(20)
 
+    def is_connected(self):
+        """
+        Return True if BLE connection is active.
+        """
+        return self.connected
+
     def connect(self):
         """
         Scan and connect to the target RC car.
@@ -220,6 +221,9 @@ class PaiZCar:
             TEAM_ID = 7
             Target BLE name = RIA_Z_07
         """
+        if self.connected:
+            return
+
         print("Team ID:", self.team_id)
         print("Target car:", self.target_name)
         print("Scanning...")
@@ -257,6 +261,7 @@ class PaiZCar:
         )
 
         if not self.service_found:
+            self.connected = False
             raise RuntimeError("Required service not found")
 
         print("Discovering characteristics...")
@@ -273,9 +278,30 @@ class PaiZCar:
         )
 
         if not self.char_found:
+            self.connected = False
             raise RuntimeError("Command characteristic not found")
 
         print("Ready")
+
+    def reconnect(self):
+        """
+        Try to reconnect to the target car.
+
+        Returns:
+            True  : reconnect success
+            False : reconnect failed
+        """
+        if self.connected:
+            return True
+
+        try:
+            self.connect()
+            return True
+
+        except Exception as e:
+            print("Reconnect failed:", e)
+            self._reset()
+            return False
 
     def _write_command(self, cmd):
         """
@@ -294,25 +320,52 @@ class PaiZCar:
         self.write_done = False
         self.write_status = None
 
-        # mode = 1: write with response
-        # This generates _IRQ_GATTC_WRITE_DONE after the write response.
-        self.ble.gattc_write(
-            self.conn_handle,
-            self.cmd_handle,
-            packet.encode(),
-            1
-        )
+        try:
+            # mode = 1: write with response
+            # This generates _IRQ_GATTC_WRITE_DONE after the write response.
+            self.ble.gattc_write(
+                self.conn_handle,
+                self.cmd_handle,
+                packet.encode(),
+                1
+            )
 
-        self._wait_until(
-            lambda: self.write_done,
-            2000,
-            "BLE write timeout"
-        )
+            self._wait_until(
+                lambda: self.write_done,
+                2000,
+                "BLE write timeout"
+            )
 
-        if self.write_status != 0:
-            raise RuntimeError("BLE write failed, status=" + str(self.write_status))
+            if self.write_status != 0:
+                self.connected = False
+                raise RuntimeError("BLE write failed, status=" + str(self.write_status))
 
-        print("Send:", packet)
+        except Exception as e:
+            # If write fails, treat the BLE connection as broken.
+            self.connected = False
+            raise e
+
+        # Continuous control sends commands very often.
+        # Uncomment this line only for debugging.
+        # print("Send:", packet)
+
+    def send(self, cmd):
+        """
+        Send one command packet.
+
+        This method is useful when the main program keeps a current command
+        state and sends it periodically.
+
+        Example:
+            car.send("F")
+            car.send("S")
+        """
+        cmd = cmd.upper()
+
+        if cmd not in ("F", "L", "R", "S"):
+            raise ValueError("Invalid command: " + cmd)
+
+        self._write_command(cmd)
 
     def command(self, cmd, duration_ms=300, period_ms=100):
         """
@@ -320,8 +373,8 @@ class PaiZCar:
 
         cmd:
             "F" : Forward
-            "L" : Left
-            "R" : Right
+            "L" : Left curve forward
+            "R" : Right curve forward
             "S" : Stop
 
         duration_ms:
@@ -335,8 +388,9 @@ class PaiZCar:
             car.command("F", 1000)
             -> Send forward command repeatedly for 1000 ms.
 
-            car.command("S", 500)
-            -> Send stop command repeatedly for 500 ms.
+        Note:
+            For continuous gesture control, using car.send() periodically
+            from main.py is usually better than this method.
         """
         cmd = cmd.upper()
 
