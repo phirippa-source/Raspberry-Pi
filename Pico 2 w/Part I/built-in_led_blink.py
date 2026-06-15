@@ -1,4 +1,4 @@
-from machine import Pin
+from machine import Pin    # machine 모듈에서 Pin 클래스를 가져옴
 import time
 
 led = Pin('LED', Pin.OUT)
